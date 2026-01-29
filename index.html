@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PredictRail | Unified Safety Intelligence</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* * 1. THEME ENGINE * */
+        :root {
+            --bg-body: #010204;
+            --bg-panel: #0b0f17;
+            --bg-glass: rgba(11, 15, 23, 0.95);
+            
+            --cyan: #00f2ea;
+            --purple: #7000ff;
+            --orange: #ff9f43;
+            --red: #ff4757;
+            --green: #2ed573;
+            
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+            
+            --border: 1px solid rgba(255, 255, 255, 0.1);
+            --shadow: 0 10px 40px rgba(0,0,0,0.5);
+            
+            --font-head: 'Space Grotesk', sans-serif;
+            --font-body: 'Inter', sans-serif;
+        }
+
+        /* RESET */
+        * { margin:0; padding:0; box-sizing:border-box; outline:none; }
+        body { background: var(--bg-body); color: var(--text-main); font-family: var(--font-body); overflow-x: hidden; line-height: 1.6; }
+        ::-webkit-scrollbar { width: 8px; background: #000; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+        /* CANVAS */
+        #neuron-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.3; pointer-events: none; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 2rem; }
+        .gap { margin-bottom: 120px; }
+
+        /* * 2. CINEMATIC INTRO * */
+        #intro-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 10000; display: flex;
+            justify-content: center; align-items: center; overflow: hidden;
+            transition: opacity 0.8s ease-out;
+        }
+        
+        .intro-content { position: relative; width: 100%; height: 100%; }
+        
+        .train-zoom {
+            position: absolute; top: 50%; left: -20%; transform: translateY(-50%);
+            font-size: 15rem; color: var(--cyan);
+            filter: drop-shadow(0 0 50px var(--cyan));
+            animation: zoomTrain 1.5s cubic-bezier(0.7, 0, 0.3, 1) forwards;
+            z-index: 2;
+        }
+        
+        .speed-lines {
+            position: absolute; top: 50%; left: 0; width: 100%; height: 2px;
+            background: rgba(255,255,255,0.1); box-shadow: 0 0 20px #fff;
+            transform: scaleX(0); transform-origin: left;
+            animation: speedLine 1.5s ease-out forwards;
+        }
+
+        .logo-reveal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-family: var(--font-head); font-size: 4rem; font-weight: 800;
+            color: #fff; opacity: 0; z-index: 1; letter-spacing: -2px;
+            animation: fadeLogo 0.5s ease-out 1.2s forwards;
+        }
+        .logo-reveal span { color: var(--cyan); }
+
+        @keyframes zoomTrain {
+            0% { left: -20%; opacity: 0; transform: translateY(-50%) scale(0.5); }
+            50% { opacity: 1; }
+            100% { left: 120%; opacity: 0; transform: translateY(-50%) scale(1.2); }
+        }
+        @keyframes speedLine {
+            0% { transform: scaleX(0); opacity: 0; }
+            50% { transform: scaleX(1); opacity: 1; }
+            100% { transform: scaleX(0); opacity: 0; transform-origin: right; }
+        }
+        @keyframes fadeLogo { to { opacity: 1; transform: translate(-50%, -50%) scale(1.1); } }
+
+
+        /* * 3. NAVIGATION * */
+        .ticker {
+            position: fixed; top: 0; left: 0; width: 100%; height: 32px;
+            background: #0f172a; border-bottom: var(--border); z-index: 6000;
+            display: flex; align-items: center; font-size: 0.75rem; font-weight: 700;
+        }
+        .tick-lbl { background: var(--red); color: #fff; padding: 0 15px; height: 100%; display: flex; align-items: center; letter-spacing: 1px; }
+        .tick-track { flex: 1; overflow: hidden; display: flex; align-items: center; }
+        .tick-content { display: flex; white-space: nowrap; animation: scroll 40s linear infinite; }
+        .t-item { margin-right: 50px; color: var(--text-muted); font-family: monospace; }
+        .t-item b { color: #fff; margin-right: 5px; }
+        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+        .navbar {
+            position: sticky; top: 32px; z-index: 5000; background: var(--bg-glass);
+            backdrop-filter: blur(20px); border-bottom: var(--border); padding: 1rem 0;
+        }
+        .nav-in { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-family: var(--font-head); font-size: 1.6rem; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .logo i { color: var(--cyan); filter: drop-shadow(0 0 8px var(--cyan)); }
+        .sys-stat { font-size: 0.8rem; border: 1px solid #333; padding: 5px 12px; border-radius: 50px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+        .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 5px var(--green); }
+
+        /* * 4. HERO * */
+        .hero { padding: 140px 0 80px; text-align: center; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px;
+            border: 1px solid var(--cyan); color: var(--cyan); border-radius: 50px;
+            font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+       .hero h1 {
+    font-family: var(--font-head);
+    /* Reduced from 4.5rem to 3.5rem to prevent awkward wrapping */
+    font-size: 3.5rem; 
+    /* Increased line-height to 1.3 to prevent vertical clipping */
+    line-height: 1.3; 
+    margin-bottom: 25px;
+    background: linear-gradient(180deg, #fff 20%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* Added padding to prevent the gradient engine from clipping letters */
+    padding: 0 15px;
+    min-height: 1.4em;
+}
+        }
+        .hero p { max-width: 800px; margin: 0 auto; color: var(--text-muted); font-size: 1.25rem; }
+
+        /* * 5. CAPABILITIES * */
+        .sec-head { border-left: 4px solid var(--cyan); padding-left: 20px; margin-bottom: 40px; }
+        .sec-head h2 { font-family: var(--font-head); font-size: 2.2rem; color: #fff; margin-bottom: 5px; }
+        .sec-head p { color: var(--text-muted); font-size: 0.95rem; }
+
+        .cap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .card {
+            background: rgba(255, 255, 255, 0.03); border: var(--border); padding: 25px; border-radius: 16px;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); cursor: pointer; position: relative; overflow: hidden;
+        }
+        .card:hover { 
+            border-color: var(--cyan); transform: translateY(-5px); 
+            background: rgba(255, 255, 255, 0.06);
+        }
+        .c-icon { font-size: 1.5rem; color: var(--cyan); margin-bottom: 15px; }
+        .c-tit { font-family: var(--font-head); font-size: 1.1rem; color: #fff; margin-bottom: 8px; }
+        .c-txt { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
+        .c-act { 
+            position: absolute; bottom: 20px; right: 20px; font-size: 0.8rem; color: var(--cyan); 
+            opacity: 0; transform: translateX(-10px); transition: 0.3s; font-weight: 700; 
+        }
+        .card:hover .c-act { opacity: 1; transform: translateX(0); }
+
+        /* * 6. METRICS * */
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+        .stat-box { 
+            background: var(--bg-panel); border: var(--border); padding: 35px 20px; border-radius: 20px; 
+            text-align: center; position: relative; overflow: hidden; transition: 0.3s;
+        }
+        .stat-box:hover { border-color: var(--cyan); box-shadow: 0 0 20px rgba(0, 242, 234, 0.1); transform: translateY(-5px); }
+        .s-val { font-family: var(--font-head); font-size: 3.5rem; font-weight: 700; color: #fff; display: block; line-height: 1; margin-bottom: 5px; }
+        .s-lbl { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; font-weight: 700; }
+
+        /* * 7. DASHBOARD * */
+        .dash { background: var(--bg-panel); border: var(--border); border-radius: 24px; overflow: hidden; margin-top: 20px; transition: border-color 0.3s; }
+        body.mode-underwriter .dash { border: 1px solid var(--purple); }
+
+        .rbac-bar {
+            background: #000; padding: 20px 30px; border-bottom: var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .rbac-grp { display: flex; gap: 8px; background: #151a25; padding: 5px; border-radius: 10px; }
+        .role-btn {
+            padding: 8px 16px; border-radius: 8px; border: none; background: transparent;
+            color: var(--text-muted); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .role-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .role-btn.active.analyst { background: var(--cyan); color: #000; }
+        .role-btn.active.manager { background: var(--orange); color: #000; }
+        .role-btn.active.underwriter { background: var(--purple); color: #fff; }
+
+        .tbl-wrap { overflow-x: auto; width: 100%; }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        th { text-align: left; padding: 20px 30px; background: rgba(255,255,255,0.02); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+        td { padding: 20px 30px; border-bottom: 1px solid #1e293b; color: #fff; font-size: 0.9rem; vertical-align: middle; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* * 8. SIMULATOR * */
+        .sim-row { display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px; }
+        .sim-in { background: var(--bg-panel); border: var(--border); padding: 40px; border-radius: 20px; }
+        .sim-out { 
+            background: linear-gradient(135deg, #0b0f17 0%, #1e1b4b 100%); border: 1px solid var(--purple);
+            padding: 40px; border-radius: 20px; text-align: center;
+        }
+        input[type=range] { width: 100%; height: 6px; background: #334155; border-radius: 10px; -webkit-appearance: none; margin: 20px 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; background: var(--cyan); border-radius: 50%; cursor: pointer; }
+        
+        .big-p { font-family: var(--font-head); font-size: 4rem; font-weight: 700; color: #fff; line-height: 1; }
+        .s-bar { display: flex; height: 35px; border-radius: 6px; overflow: hidden; margin-top: 20px; }
+        .seg { display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; transition: width 0.1s; }
+
+        /* * 9. UTILS * */
+        .footer { padding: 60px 0; text-align: center; border-top: var(--border); color: var(--text-muted); font-size: 0.9rem; }
+        
+        /* Modal */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px);
+            z-index: 9999; display: none; justify-content: center; align-items: center;
+        }
+        .modal.open { display: flex; animation: fadeIn 0.3s forwards; }
+        .m-box { width: 700px; background: #0f131f; border: 1px solid var(--cyan); border-radius: 20px; padding: 40px; position: relative; }
+        .m-close { position: absolute; top: 20px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #fff; }
+        .term { background: #000; padding: 20px; border-radius: 10px; font-family: monospace; color: var(--green); height: 200px; overflow-y: auto; margin-top: 20px; border: 1px solid #333; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .reveal { opacity: 0; transform: translateY(30px); transition: 0.8s ease-out; }
+        .reveal.active { opacity: 1; transform: translateY(0); }
+
+        /* Add smooth transitions for interactive elements */
+        .card, .stat-box, .role-btn {
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+        }
+
+        .card:hover, .stat-box:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 10px 30px rgba(0, 242, 234, 0.2);
+        }
+
+        .role-btn:hover {
+            transform: scale(1.05);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .embed-map-container {
+            transition: filter 0.3s ease;
+        }
+
+        .embed-map-container:hover {
+            filter: brightness(1.1) contrast(1.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="intro-layer">
+        <div class="intro-content">
+            <div class="speed-lines"></div>
+            <i class="fas fa-train-subway train-zoom"></i>
+            <div class="logo-reveal">Predict<span>Rail</span></div>
+        </div>
+    </div>
+
+    <canvas id="neuron-canvas"></canvas>
+
+    <div class="ticker">
+        <div class="tick-lbl">SIMULATED</div>
+        <div class="tick-track">
+            <div class="tick-content">
+                <span class="t-item"><b>SYSTEM:</b> V12.0 ONLINE</span>
+                <span class="t-item"><b>ZONE WEST:</b> SENSOR STREAM ACTIVE</span>
+                <span class="t-item"><b>MARKET:</b> INSURANCE INDEX STABLE</span>
+                <span class="t-item"><b>ALERT:</b> WEATHER WARNING (MUMBAI)</span>
+            </div>
+        </div>
+    </div>
+
+    <nav class="navbar">
+        <div class="container nav-in">
+            <div class="logo" onclick="window.location.reload()">
+                <i class="fas fa-train-subway"></i> PredictRail
+            </div>
+            <div class="sys-stat">
+                <div class="dot"></div> Secure Connection
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <section class="hero reveal">
+            <div class="badge"><i class="fas fa-bolt"></i> Streaming-Capable Risk Engine</div>
+            <h1 id="typewriter"></h1>
+            <p>Unified safety intelligence for insurers and operators.</p>
+        </section>
+        
+        <div style="text-align:center; color:var(--text-muted); font-size:0.8rem; margin-top:-60px; margin-bottom:60px;">
+            *All values shown are static, simulated data for demonstration purposes only.
+        </div>
+
+        <section class="gap reveal">
+            <div class="sec-head">
+                <h2>Platform Capabilities</h2>
+                <p>Select any module to launch simulation.</p>
+            </div>
+            <div class="cap-grid" id="caps"></div>
+        </section>
+
+        <section class="gap reveal">
+            <div class="dash">
+                <div class="rbac-bar">
+                    <div>
+                        <h3 style="margin-bottom:5px;">Risk Registry</h3>
+                        <small style="color:var(--text-muted)">Current View: <span id="rbac-txt" style="color:var(--cyan)">Safety Analyst</span></small>
+                    </div>
+                    <div class="rbac-grp">
+                        <button class="role-btn active analyst" onclick="setRole('analyst', this)">
+                            <i class="fas fa-microscope"></i> Analyst
+                        </button>
+                        <button class="role-btn manager" onclick="setRole('manager', this)">
+                            <i class="fas fa-tools"></i> Manager
+                        </button>
+                        <button class="role-btn underwriter" onclick="setRole('underwriter', this)">
+                            <i class="fas fa-file-contract"></i> Underwriter
+                        </button>
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asset Identity</th>
+                                <th>Risk Score</th>
+                                <th>Financial Exposure</th>
+                                <th>Active Telemetry (RBAC)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="risk-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="stat-row gap reveal">
+            <div class="stat-box">
+                <div class="s-val countup" data-target="78">0</div>
+                <div class="s-lbl">Safety Score (Simulated)</div>
+            </div>
+            <div class="stat-box">
+                <div class="s-val countup" data-target="14">0</div>
+                <div class="s-lbl">Critical Assets (Static)</div>
+            </div>
+            <div class="stat-box">
+                <div class="s-val countup" data-target="842">0</div>
+                <div class="s-lbl">Annual EML (₹ Cr) (Static)</div>
+            </div>
+            <div class="stat-box">
+                <div class="s-val countup" data-target="156">0</div>
+                <div class="s-lbl">Savings (₹ Cr) (Static)</div>
+            </div>
+        </section>
+
+        <section class="sim-row gap reveal">
+            <div class="sim-in">
+                <h3 style="margin-bottom:20px;">Impact Simulator</h3>
+                <label>Maint. Budget (+%)</label>
+                <input type="range" id="m-in" min="0" max="100" value="45">
+                <div style="text-align:right; color:var(--cyan); font-weight:700;" id="m-val">45%</div>
+                
+                <label style="margin-top:20px; display:block;">Signal Upgrade</label>
+                <input type="range" id="s-in" min="0" max="100" value="60">
+                <div style="text-align:right; color:var(--cyan); font-weight:700;" id="s-val">60</div>
+            </div>
+            <div class="sim-out">
+                <div style="text-transform:uppercase; font-size:0.8rem; color:var(--text-muted);">Projected Premium</div>
+                <div class="big-p">₹<span id="price">23.1</span>Cr</div>
+                <div style="color:var(--cyan); font-weight:700; margin-bottom:10px;">Savings: ₹<span id="saving">5.4</span>Cr</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 20px;">Scenario-based simulation (not live pricing).</div>
+                <div class="s-bar">
+                    <div id="seg-r" class="seg" style="width:45%; background:#3b82f6;">RAIL</div>
+                    <div id="seg-i" class="seg" style="width:35%; background:#2ed573; color:#000;">INS</div>
+                    <div id="seg-p" class="seg" style="width:20%; background:#7000ff;">PLAT</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="gap reveal" style="display:grid; grid-template-columns:2fr 1fr; gap:30px;">
+            <div style="background:var(--bg-panel); border:var(--border); padding:30px; border-radius:16px; height:400px;">
+                <canvas id="c1"></canvas>
+            </div>
+            <div style="background:var(--bg-panel); border:var(--border); padding:30px; border-radius:16px; height:400px;">
+                <canvas id="c2"></canvas>
+            </div>
+        </section>
+
+        <section class="gap reveal">
+            <div class="sec-head">
+                <h2>Action Loop</h2>
+                <p>The system ensures real-time feedback and dynamic adjustments to risk scores.</p>
+            </div>
+            <div class="cap-grid">
+                <div class="card">
+                    <i class="fas fa-sync-alt c-icon"></i>
+                    <div class="c-tit">Edge Processing</div>
+                    <div class="c-txt">Processes signals locally to identify anomalies and prioritize alerts.</div>
+                </div>
+                <div class="card">
+                    <i class="fas fa-exchange-alt c-icon"></i>
+                    <div class="c-tit">Action Loop</div>
+                    <div class="c-txt">Generates maintenance tickets and adjusts premiums dynamically based on real-time data.</div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            © 2026 PredictRail Analytics. Engineered for Trust.
+        </footer>
+
+    </div>
+
+    <div class="modal" id="modal" onclick="closeModal(event)">
+        <div class="m-box">
+            <div class="m-close" onclick="closeModal(event, true)">×</div>
+            <h2 id="m-tit" style="color:var(--cyan); margin-bottom:10px;"></h2>
+            <p id="m-desc" style="color:var(--text-muted)"></p>
+            <div class="term" id="m-out"></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. DATA
+        const features = [
+            {t:"Unified Safety Data Intake", i:"database", d:"Collects and standardizes safety data from tracks, signals, maintenance logs, and incident reports.", l:["[CONN] Sensors... OK","[SYNC] Maint Logs... OK"]},
+            {t:"Asset Identity & Mapping Engine", i:"fingerprint", d:"Assigns unique digital ID to every railway asset and maps it to zone/location.", l:["[GEN] UUID: TRK-8821","[MAP] Zone: North"]},
+            {t:"Predictive Safety Risk Scoring", i:"calculator", d:"Calculates standardized risk score (0–100) representing accident probability.", l:["[AI] Ingesting...","[CALC] Score: 78/100"]},
+            {t:"Time-Window Risk Projection", i:"clock", d:"Projects accident risk over short-term and annual horizons for insurance pricing.", l:["[PROJ] 30-Day: Stable","[PROJ] 365-Day: Crit"]},
+            {t:"Near-Miss Risk Amplifier", i:"bolt", d:"Elevates risk scores using near-miss and anomaly patterns before accidents occur.", l:["[SCAN] Signal Logs","[DET] 3 Events","[ACT] Risk x1.5"]},
+            {t:"Risk Driver Explainability Panel", i:"list-ul", d:"Breaks down each risk score into contributing safety factors for transparency.", l:["[AUDIT] Wear: 40%","[AUDIT] Latency: 30%"]},
+            {t:"Expected Monetary Loss Calculator", i:"coins", d:"Converts accident probability into estimated financial loss using cost models.", l:["[CALC] Prob: 0.045","[OUT] ₹54 Lakhs"]},
+            {t:"Loss Distribution Analytics", i:"chart-pie", d:"Aggregates financial loss across zones, asset types, and risk categories.", l:["[AGG] Zone A: ₹40Cr","[AGG] Zone B: ₹120Cr"]},
+            {t:"Baseline vs Predictive Pricing Comparator", i:"balance-scale", d:"Compares traditional insurance pricing with PredictRail’s risk-adjusted pricing.", l:["[CMP] Trad: ₹30Cr","[CMP] PR: ₹22Cr"]},
+            {t:"Performance-Linked Premium Engine", i:"tags", d:"Adjusts insurance premiums dynamically based on measurable improvements in safety.", l:["[POL] #9921","[ADJ] -12% Premium"]},
+            {t:"Insurance Partner Risk Dashboard", i:"briefcase", d:"Provides insurers with verified risk metrics and financial justifications.", l:["[SEC] Encrypted","[MODE] Underwriter"]},
+            {t:"Benefit-Sharing Allocation Model", i:"handshake", d:"Visualizes how insurance savings are distributed between railways, insurers, and platform.", l:["[PAY] Rail: 45%","[PAY] Ins: 35%","[PAY] Plat: 20%"]},
+            {t:"Risk-Based Maintenance Prioritizer", i:"tools", d:"Ranks assets by risk-reduction impact per rupee spent to guide maintenance.", l:["[PRIO] #99 > ROI 5x","[SCHED] Ticket Created"]},
+            {t:"Scenario Impact Simulator", i:"sliders-h", d:"Simulates how safety interventions or delays affect risk scores and premiums.", l:["[SIM] Budget +20%","[RES] Risk -15pts"]},
+            {t:"Governance & Audit Trail System", i:"gavel", d:"Maintains a traceable record of data inputs and financial outputs.", l:["[LOG] User: Admin","[HASH] Verified"]}
+        ];
+
+        const assets = [
+            {id:'TRK-Z1-01', s:32, eml:142.5, t:['Wear:High','Lat:4ms'], o:['Crew:A','ETA:2h'], f:['Prem:Max','Liab:Hi']},
+            {id:'SIG-Z2-49', s:58, eml:82.1, t:['Relay:Old','Temp:45C'], o:['Crew:B','ETA:6h'], f:['Prem:Med','Liab:Md']},
+            {id:'TRK-Z3-99', s:89, eml:12.4, t:['Optimal'], o:['Auto','Next:24h'], f:['Prem:Lo','Liab:Lo']},
+            {id:'SIG-Z4-22', s:21, eml:195.0, t:['Fail','NoSig'], o:['URGENT','ETA:10m'], f:['CLAIM','Liab:Max']}
+        ];
+
+        let role = 'analyst';
+
+        window.onload = () => {
+            // INTRO SEQUENCE
+            setTimeout(() => {
+                document.getElementById('intro-layer').style.opacity = '0';
+                setTimeout(() => document.getElementById('intro-layer').remove(), 800);
+            }, 2500); // 2.5s Intro
+
+            initCanvas(); typeWriter(); renderCaps(); renderTable(); calcSim(); runCounters(); initCharts();
+            const obs = new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting) e.target.classList.add('active') }), {threshold:0.1});
+            document.querySelectorAll('.reveal').forEach(e => obs.observe(e));
+        }
+
+        function renderCaps() {
+            document.getElementById('caps').innerHTML = features.map((f,i) => `
+                <div class="card" onclick="openMod(${i})">
+                    <i class="fas fa-${f.i} c-icon"></i>
+                    <div class="c-tit">${f.t}</div>
+                    <div class="c-txt">${f.d}</div>
+                    <div class="c-act">LAUNCH ></div>
+                </div>
+            `).join('');
+        }
+
+        function openMod(i) {
+            const f = features[i];
+            document.getElementById('m-tit').innerText = f.t;
+            document.getElementById('m-desc').innerText = f.d;
+            document.getElementById('m-out').innerHTML = '';
+            document.getElementById('modal').classList.add('open');
+            f.l.forEach((l,x) => setTimeout(() => document.getElementById('m-out').innerHTML += `<div>${l}</div>`, x*300));
+        }
+        function closeModal(e, f) { if(f || e.target.id=='modal') document.getElementById('modal').classList.remove('open'); }
+
+        function setRole(r, btn) {
+            role = r;
+            document.body.className = r === 'underwriter' ? 'mode-underwriter' : '';
+            document.querySelectorAll('.role-btn').forEach(b => b.className = 'role-btn');
+            btn.classList.add('active', r);
+            const map = {analyst:['Safety Analyst','var(--cyan)'], manager:['Ops Manager','var(--orange)'], underwriter:['Underwriter','var(--purple)']};
+            const el = document.getElementById('rbac-txt');
+            el.innerText = map[r][0]; el.style.color = map[r][1];
+            renderTable();
+        }
+
+        function renderTable() {
+            const b = document.getElementById('risk-rows');
+            b.innerHTML = '';
+            assets.forEach(a => {
+                let badge = a.s<40 ? 'sc-bad' : a.s<75 ? 'sc-mid' : 'sc-good';
+                let info = '';
+                if(role=='analyst') info = a.t.map(x=>`<span style="border:1px solid var(--cyan); color:var(--cyan); padding:2px 6px; font-size:0.7rem; border-radius:4px; margin-right:4px;">${x}</span>`).join('');
+                else if(role=='manager') info = a.o.map(x=>`<span style="border:1px solid var(--orange); color:var(--orange); padding:2px 6px; font-size:0.7rem; border-radius:4px; margin-right:4px;">${x}</span>`).join('');
+                else info = a.f.map(x=>`<span style="border:1px solid var(--purple); color:var(--purple); padding:2px 6px; font-size:0.7rem; border-radius:4px; margin-right:4px;">${x}</span>`).join('');
+                
+                let eml = role=='underwriter' ? `<b style="color:var(--purple)">${a.eml}</b>` : a.eml;
+                b.innerHTML += `<tr><td class="id-col">${a.id}</td><td><span class="${badge}">${a.s}/100</span></td><td>₹ ${eml} Cr</td><td>${info}</td><td><i class="fas fa-check-circle" style="color:var(--green)"></i></td></tr>`;
+            });
+        }
+
+        function calcSim() {
+            const m = +document.getElementById('m-in').value; const s = +document.getElementById('s-in').value;
+            document.getElementById('m-val').innerText = m+'%'; document.getElementById('s-val').innerText = s;
+            const fac = ((m*0.4)+(s*0.6))/100;
+            document.getElementById('price').innerText = (28.5 * (1-(fac*0.35))).toFixed(1);
+            document.getElementById('saving').innerText = (28.5 - (28.5 * (1-(fac*0.35)))).toFixed(1);
+            const r = 45+(fac*10); const i = 35-(fac*5); const p = 100-(r+i);
+            document.getElementById('seg-r').style.width = r+'%'; document.getElementById('seg-i').style.width = i+'%'; document.getElementById('seg-p').style.width = p+'%';
+        }
+        document.getElementById('m-in').oninput = calcSim; document.getElementById('s-in').oninput = calcSim;
+
+        function typeWriter() {
+            const e = document.getElementById('typewriter');
+            const t = "Predictive safety intelligence for insurance-grade decisions.";
+            let i=0; e.innerHTML="";
+            const r = () => { 
+                if(i<t.length) { 
+                    e.innerHTML += t.charAt(i) === ' ' ? ' ' : t.charAt(i); 
+                    i++; setTimeout(r, 40); 
+                } 
+            };
+            r();
+        }
+
+        function runCounters() {
+            document.querySelectorAll('.countup').forEach(e => {
+                const t = +e.dataset.target; let c=0; 
+                const iv = setInterval(() => { c+=Math.ceil(t/50); if(c>=t) { e.innerText=t; clearInterval(iv); } else e.innerText=c; }, 30);
+            });
+        }
+
+        function initCharts() {
+            new Chart(document.getElementById('c1'), {type:'line', data:{labels:['Q1','Q2','Q3','Q4'], datasets:[{label:'Loss', data:[1200,900,850,840], borderColor:'#00f2ea', backgroundColor:'rgba(0,242,234,0.1)', fill:true}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{labels:{color:'#94a3b8'}}}, scales:{y:{grid:{color:'#1e293b'}}}}});
+            new Chart(document.getElementById('c2'), {type:'doughnut', data:{labels:['Crit','Warn','Safe'], datasets:[{data:[20,30,50], backgroundColor:['#ff4757','#ff9f43','#00f2ea'], borderWidth:0}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom', labels:{color:'#94a3b8'}}}}});
+        }
+
+        function initCanvas() {
+            const c = document.getElementById('neuron-canvas'); const x = c.getContext('2d');
+            let w, h, p=[];
+            const r = () => { w=c.width=window.innerWidth; h=c.height=window.innerHeight; };
+            window.onresize = r; r();
+            for(let i=0; i<50; i++) p.push({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-.5), vy:(Math.random()-.5)});
+            function a(){
+                x.clearRect(0,0,w,h); x.fillStyle='rgba(0,242,234,0.3)';
+                p.forEach(k=>{ k.x+=k.vx; k.y+=k.vy; if(k.x<0)k.x=w; if(k.x>w)k.x=0; if(k.y<0)k.y=h; if(k.y>h)k.y=0; x.beginPath(); x.arc(k.x,k.y,1.5,0,Math.PI*2); x.fill(); });
+                requestAnimationFrame(a);
+            }
+            a();
+        }
+    </script>
+</body>
+</html>
